@@ -171,7 +171,7 @@ async def main():
 
             #await page.locator('xpath=/html/body/div[3]/div[2]/div/div[1]/div/span').click()
 
-            await page.locator("span").filter(has_text="Exportar").click()
+            await page.get_by_text("Exportar", exact=True).click()
             await page.wait_for_timeout(3000)
 
             await page.locator(".s-tree-node__content > .ssc-checkbox-wrapper > .ssc-checkbox > .ssc-checkbox-input").first.click()
