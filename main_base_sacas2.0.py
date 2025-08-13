@@ -147,7 +147,7 @@ async def main():
             await page.goto("https://spx.shopee.com.br/#/general-to-management")
             await page.wait_for_timeout(8000)
             #await page.locator('xpath=/html/body/div[1]/div/div[x2]/div[2]/div/div/div/div[1]/div[1]/div[8]/div/span/span/span/span/button').click()
-            await page.get_by_role('button', name='Exportar').click()
+            await page.get_by_role("button", name="Exportar").click()
             await page.wait_for_timeout(8000)
             await page.locator('xpath=/html[1]/body[1]/span[4]/div[1]/div[1]/div[1]').click()
             #await page.get_by_role("button", name="Exportar").nth(1).click()
