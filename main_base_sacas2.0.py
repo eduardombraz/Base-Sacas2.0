@@ -169,7 +169,7 @@ async def main():
             await date_input.fill(d0)
             await page.wait_for_timeout(5000)
 
-            await page.locator('xpath=/html/body/div[3]/div[2]/div/div[1]/div/span').click()
+            #await page.locator('xpath=/html/body/div[3]/div[2]/div/div[1]/div/span').click()
 
             await page.locator(".s-tree-node__content > .ssc-checkbox-wrapper > .ssc-checkbox > .ssc-checkbox-input").first.click()
             await page.wait_for_timeout(8000)
