@@ -31,4 +31,4 @@ jobs:
           playwright install chromium
 
       - name: Executar o script
-        run: xvfb-run python main_base_to_packed.py
+        run: xvfb-run python main_base_sacas2.0.py
