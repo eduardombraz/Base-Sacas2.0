@@ -62,6 +62,10 @@ def unzip_and_process_data(zip_path, extract_to_dir):
             dayfirst=True
         ).dt.tz_localize("America/Sao_Paulo", ambiguous='NaT', nonexistent='NaT')
 
+        # Remove linhas sem data válida
+        df_final = df_final[df_final.iloc[:, 17].notna()]
+
+        # Filtra pelo período desejado
         df_final = df_final[(df_final.iloc[:, 17] >= inicio) & (df_final.iloc[:, 17] < fim)]
         print(f"Dados filtrados entre {inicio} e {fim}. Total de linhas: {len(df_final)}")
 
@@ -71,16 +75,19 @@ def unzip_and_process_data(zip_path, extract_to_dir):
         df_selecionado = df_final.iloc[:, colunas_desejadas].copy()
         df_selecionado.columns = ['Chave', 'Coluna9', 'Coluna15', 'Coluna17', 'Coluna2']
 
+        # Contagem de ocorrências por chave
         contagem = df_selecionado['Chave'].value_counts().reset_index()
         contagem.columns = ['Chave', 'Quantidade']
 
-        agrupado = df_selecionado.groupby('Chave').agg({
+        # Agrupando para retornar apenas uma linha por chave
+        agrupado = df_selecionado.groupby('Chave', as_index=False).agg({
             'Coluna9': 'first',
             'Coluna15': 'first',
             'Coluna17': 'first',
             'Coluna2': 'first',
-        }).reset_index()
+        })
 
+        # Merge para incluir quantidade
         resultado = pd.merge(agrupado, contagem, on='Chave')
         resultado = resultado[['Chave', 'Coluna9', 'Coluna15', 'Coluna17', 'Quantidade', 'Coluna2']]
 
@@ -98,17 +105,20 @@ def update_google_sheet_with_dataframe(df_to_upload):
         return
     try:
         print("Enviando dados processados para o Google Sheets...")
-        scope = ["https://spreadsheets.google.com/feeds", 
-                 'https://www.googleapis.com/auth/spreadsheets', 
-                 "https://www.googleapis.com/auth/drive"]
+        scope = [
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive"
+        ]
         creds = ServiceAccountCredentials.from_json_keyfile_name("hxh.json", scope)
         client = gspread.authorize(creds)
         planilha = client.open("Base Sacas")
         aba = planilha.worksheet("Base")
         aba.clear()
-        set_with_dataframe(aba, df_to_upload)
+        set_with_dataframe(aba, df_to_upload, include_index=False, include_column_header=True)
         print("✅ Dados enviados para o Google Sheets com sucesso!")
         time.sleep(5)
+    except gspread.exceptions.APIError as e:
+        print(f"❌ Erro de API do Google Sheets: {e}")
     except Exception as e:
         print(f"❌ Erro ao enviar para o Google Sheets: {e}")
 
@@ -116,7 +126,7 @@ async def main():
     os.makedirs(DOWNLOAD_DIR, exist_ok=True)
     async with async_playwright() as p:
         browser = await p.chromium.launch(
-            headless=False, 
+            headless=False,
             args=["--no-sandbox", "--disable-dev-shm-usage", "--window-size=1920,1080"]
         )
         context = await browser.new_context(accept_downloads=True, viewport={"width": 1920, "height": 1080})
