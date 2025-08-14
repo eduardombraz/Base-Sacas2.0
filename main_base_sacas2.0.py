@@ -28,16 +28,6 @@ def rename_downloaded_file(download_dir, download_path):
         return None
 
 def unzip_and_process_data(zip_path, extract_to_dir):
-    """
-    Unzips a file, merges all CSVs, and processes the data according to the specified logic.
-    
-    Args:
-        zip_path (str): The full path to the .zip file.
-        extract_to_dir (str): The directory to extract files to.
-
-    Returns:
-        pd.DataFrame: A fully processed pandas DataFrame, or None if an error occurs.
-    """
     try:
         unzip_folder = os.path.join(extract_to_dir, "extracted_files")
         os.makedirs(unzip_folder, exist_ok=True)
@@ -57,48 +47,30 @@ def unzip_and_process_data(zip_path, extract_to_dir):
         all_dfs = [pd.read_csv(file, encoding='utf-8') for file in csv_files]
         df_final = pd.concat(all_dfs, ignore_index=True)
 
-        # === INÍCIO DA LÓGICA DE PROCESSAMENTO INTEGRADA ===
         print("Iniciando processamento dos dados...")
-        
-        # 1. Selecionar colunas desejadas pela posição
         colunas_desejadas = [0, 9, 15, 17, 2]
         df_selecionado = df_final.iloc[:, colunas_desejadas].copy()
-        
-        # 2. Renomear colunas
         df_selecionado.columns = ['Chave', 'Coluna9', 'Coluna15', 'Coluna17', 'Coluna2']
-
-        # 3. Contar ocorrências da 'Chave'
         contagem = df_selecionado['Chave'].value_counts().reset_index()
         contagem.columns = ['Chave', 'Quantidade']
-
-        # 4. Agrupar para obter valores únicos e evitar duplicatas
         agrupado = df_selecionado.groupby('Chave').agg({
             'Coluna9': 'first',
             'Coluna15': 'first',
             'Coluna17': 'first',
             'Coluna2': 'first',
         }).reset_index()
-
-        # 5. Juntar os dados agrupados com a contagem
         resultado = pd.merge(agrupado, contagem, on='Chave')
-        
-        # 6. Reordenar colunas para o resultado final
         resultado = resultado[['Chave', 'Coluna9', 'Coluna15', 'Coluna17', 'Quantidade', 'Coluna2']]
         
         print("Processamento de dados concluído com sucesso.")
-        # === FIM DA LÓGICA DE PROCESSAMENTO ===
-        
-        shutil.rmtree(unzip_folder) # Limpa a pasta com os arquivos extraídos
-        
+        shutil.rmtree(unzip_folder)
         return resultado
         
     except Exception as e:
         print(f"Erro ao descompactar ou processar os dados: {e}")
         return None
 
-
 def update_google_sheet_with_dataframe(df_to_upload):
-    """Updates a Google Sheet with the content of a pandas DataFrame."""
     if df_to_upload is None or df_to_upload.empty:
         print("Nenhum dado para enviar ao Google Sheets.")
         return
@@ -106,16 +78,14 @@ def update_google_sheet_with_dataframe(df_to_upload):
     try:
         print("Enviando dados processados para o Google Sheets...")
         scope = ["https://spreadsheets.google.com/feeds", 'https://www.googleapis.com/auth/spreadsheets', "https://www.googleapis.com/auth/drive"]
-        # ATENÇÃO: Use o caminho correto para seu arquivo de credenciais JSON
         creds = ServiceAccountCredentials.from_json_keyfile_name("hxh.json", scope)
         client = gspread.authorize(creds)
         
-        # ATENÇÃO: Use o nome correto da sua planilha e da aba
         planilha = client.open("Base Sacas")
         aba = planilha.worksheet("Base")
         
-        aba.clear() # Limpa a aba antes de inserir novos dados
-        set_with_dataframe(aba, df_to_upload) # Usa a função para enviar o DataFrame
+        aba.clear()
+        set_with_dataframe(aba, df_to_upload)
         
         print("✅ Dados enviados para o Google Sheets com sucesso!")
         time.sleep(5)
@@ -130,7 +100,6 @@ async def main():
         context = await browser.new_context(accept_downloads=True, viewport={"width": 1920, "height": 1080})
         page = await context.new_page()
         try:
-            # LOGIN
             await page.goto("https://spx.shopee.com.br/")
             await page.wait_for_selector('xpath=//*[@placeholder="Ops ID"]', timeout=15000)
             await page.locator('xpath=//*[@placeholder="Ops ID"]').fill('Ops71223')
@@ -143,19 +112,21 @@ async def main():
                 print("Nenhum pop-up de diálogo foi encontrado.")
                 await page.keyboard.press("Escape")
             
-              # NAVEGAÇÃO E DOWNLOAD
             await page.goto("https://spx.shopee.com.br/#/general-to-management")
             await page.wait_for_timeout(8000)
-            #await page.locator('xpath=/html/body/div[1]/div/div[x2]/div[2]/div/div/div/div[1]/div[1]/div[8]/div/span/span/span/span/button').click()
             await page.get_by_role("button", name="Exportar").click()
             await page.wait_for_timeout(8000)
             await page.locator('xpath=/html[1]/body[1]/span[4]/div[1]/div[1]/div[1]').click()
-            #await page.get_by_role("button", name="Exportar").nth(1).click()
             await page.wait_for_timeout(8000)
-            #await page.locator('xpath=/html[1]/body[1]/div[3]/div[2]/div[1]/div[2]/form[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[2]/div[1]/div[3]/div[1]/div[1]/label[1]/span[1]/input[1]').click()
 
-            d1 = (datetime.now() - timedelta(days=1)).strftime("%Y/%m/%d")
-            d0 = (datetime.now() + timedelta(days=1)).strftime("%Y/%m/%d")
+            # --- Lógica ajustada das datas ---
+            agora = datetime.now()
+            if agora.hour < 1:
+                d1 = (agora - timedelta(days=1)).strftime("%Y/%m/%d")
+                d0 = agora.strftime("%Y/%m/%d")
+            else:
+                d1 = agora.strftime("%Y/%m/%d")
+                d0 = agora.strftime("%Y/%m/%d")
 
             date_input = page.locator('xpath=//*[@placeholder="Please choose date"]').nth(0)
             await date_input.wait_for(state="visible", timeout=10000)
@@ -168,19 +139,15 @@ async def main():
             await date_input.click(force=True)
             await date_input.fill(d0)
             await page.wait_for_timeout(5000)
-
-            #await page.locator('xpath=/html/body/div[3]/div[2]/div/div[1]/div/span').click()
+            # --- Fim do ajuste de datas ---
 
             await page.get_by_text("Criado em", exact=True).click()
             await page.wait_for_timeout(8000)
-
             await page.locator(".s-tree-node__content > .ssc-checkbox-wrapper > .ssc-checkbox > .ssc-checkbox-input").first.click()
             await page.wait_for_timeout(8000)
-            
             await page.get_by_role("button", name="Confirmar").click()
             await page.wait_for_timeout(360000)
             
-            # DOWNLOAD
             async with page.expect_download() as download_info:
                 await page.get_by_role("button", name="Baixar").first.click()
             
@@ -189,14 +156,9 @@ async def main():
             await download.save_as(download_path)
             print(f"Download concluído: {download_path}")
 
-            # --- FLUXO DE PROCESSAMENTO E UPLOAD ---
             renamed_zip_path = rename_downloaded_file(DOWNLOAD_DIR, download_path)
-            
             if renamed_zip_path:
-                # 1. Descompacta e processa os dados em memória, retornando um DataFrame
                 final_dataframe = unzip_and_process_data(renamed_zip_path, DOWNLOAD_DIR)
-                
-                # 2. Faz o upload do DataFrame final para o Google Sheets
                 update_google_sheet_with_dataframe(final_dataframe)
 
         except Exception as e:
