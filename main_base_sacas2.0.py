@@ -45,6 +45,7 @@ def unzip_and_process_data(zip_path, extract_to_dir):
         print(f"Lendo e unificando {len(csv_files)} arquivos CSV...")
         all_dfs = [pd.read_csv(file, encoding='utf-8') for file in csv_files]
         df_final = pd.concat(all_dfs, ignore_index=True)
+        print(f"Total de linhas antes do filtro: {len(df_final)}")
 
         # --- FILTRAR PELA COLUNA17 (índice 17) com fuso horário ---
         agora = datetime.now(ZoneInfo("America/Sao_Paulo"))
@@ -64,10 +65,11 @@ def unzip_and_process_data(zip_path, extract_to_dir):
 
         # Remove linhas sem data válida
         df_final = df_final[df_final.iloc[:, 17].notna()]
+        print(f"Linhas após remover NaT na coluna17: {len(df_final)}")
 
         # Filtra pelo período desejado
         df_final = df_final[(df_final.iloc[:, 17] >= inicio) & (df_final.iloc[:, 17] < fim)]
-        print(f"Dados filtrados entre {inicio} e {fim}. Total de linhas: {len(df_final)}")
+        print(f"Linhas após filtro de data entre {inicio} e {fim}: {len(df_final)}")
 
         # ---------------------------------------------------------
         print("Iniciando processamento dos dados...")
@@ -86,6 +88,7 @@ def unzip_and_process_data(zip_path, extract_to_dir):
             'Coluna17': 'first',
             'Coluna2': 'first',
         })
+        print(f"Linhas após agrupamento por chave: {len(agrupado)}")
 
         # Merge para incluir quantidade
         resultado = pd.merge(agrupado, contagem, on='Chave')
@@ -120,11 +123,10 @@ def update_google_sheet_with_dataframe(df_to_upload):
         # Envia o DataFrame
         set_with_dataframe(aba, df_to_upload, include_index=False, include_column_header=True)
 
-        # Se chegou aqui, o envio foi bem sucedido
         print("✅ Dados enviados para o Google Sheets com sucesso!")
 
     except Exception as e:
-        # Mostra apenas erros reais, Response [200] não será interpretado como erro
+        # Ignora Response [200], mostra apenas erros reais
         print(f"❌ Erro ao enviar para o Google Sheets: {e}")
 
 async def main():
