@@ -56,12 +56,20 @@ def unzip_and_process_data(zip_path, extract_to_dir):
             inicio = agora.replace(hour=6, minute=0, second=0, microsecond=0)
             fim = (agora + timedelta(days=1)).replace(hour=6, minute=0, second=0, microsecond=0)
 
-        # Converte Coluna17 para datetime com dayfirst=True e aplica fuso horário
+        # Adiciona fuso horário a inicio/fim
+        inicio = inicio.replace(tzinfo=ZoneInfo("America/Sao_Paulo"))
+        fim = fim.replace(tzinfo=ZoneInfo("America/Sao_Paulo"))
+
+        # Converte Coluna17 para datetime
         df_final.iloc[:, 17] = pd.to_datetime(
             df_final.iloc[:, 17],
             errors='coerce',
             dayfirst=True
-        ).dt.tz_localize("America/Sao_Paulo", ambiguous='NaT', nonexistent='NaT')
+        )
+
+        # Localiza fuso apenas se ainda não tiver
+        if df_final.iloc[:, 17].dt.tz is None:
+            df_final.iloc[:, 17] = df_final.iloc[:, 17].dt.tz_localize("America/Sao_Paulo", ambiguous='NaT', nonexistent='NaT')
 
         # Remove linhas sem data válida
         df_final = df_final[df_final.iloc[:, 17].notna()]
@@ -94,6 +102,10 @@ def unzip_and_process_data(zip_path, extract_to_dir):
         resultado = pd.merge(agrupado, contagem, on='Chave')
         resultado = resultado[['Chave', 'Coluna9', 'Coluna15', 'Coluna17', 'Quantidade', 'Coluna2']]
 
+        # Opcional: mostra as 5 primeiras linhas antes do envio
+        print("5 primeiras linhas do DataFrame final:")
+        print(resultado.head())
+
         print("Processamento de dados concluído com sucesso.")
         shutil.rmtree(unzip_folder)
         return resultado
@@ -123,11 +135,11 @@ def update_google_sheet_with_dataframe(df_to_upload):
         # Envia o DataFrame
         set_with_dataframe(aba, df_to_upload, include_index=False, include_column_header=True)
 
+        # Confirma sucesso
         print("✅ Dados enviados para o Google Sheets com sucesso!")
 
     except Exception as e:
-        # Ignora Response [200], mostra apenas erros reais
-        print(f"❌ Erro ao enviar para o Google Sheets: {e}")
+        print(f"❌ Erro real ao enviar para o Google Sheets: {e}")
 
 async def main():
     os.makedirs(DOWNLOAD_DIR, exist_ok=True)
