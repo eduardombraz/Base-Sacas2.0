@@ -96,6 +96,9 @@ def unzip_and_process_data(zip_path, extract_to_dir):
         resultado = pd.merge(agrupado, contagem, on='Chave')
         resultado = resultado[['Chave', 'Coluna9', 'Coluna15', 'Coluna17', 'Quantidade', 'Coluna2']]
 
+        # --- REMOVE O FUSO HORÁRIO DA COLUNA17 ---
+        resultado['Coluna17'] = resultado['Coluna17'].dt.tz_localize(None)
+
         # Mostra as 5 primeiras linhas antes do envio
         print("5 primeiras linhas do DataFrame final:")
         print(resultado.head())
