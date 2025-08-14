@@ -59,15 +59,15 @@ def unzip_and_process_data(zip_path, extract_to_dir):
         inicio = inicio.replace(tzinfo=ZoneInfo("America/Sao_Paulo"))
         fim = fim.replace(tzinfo=ZoneInfo("America/Sao_Paulo"))
 
-        # Converte Coluna17 para datetime (dayfirst=True) e remove inválidos
+        # Converte Coluna17 para datetime com segurança
         df_final.iloc[:, 17] = pd.to_datetime(df_final.iloc[:, 17], errors='coerce', dayfirst=True)
+
+        # Mantém apenas linhas válidas e copia
         df_final = df_final[df_final.iloc[:, 17].notna()].copy()
 
-        # Aplica fuso horário com segurança
-        df_final.iloc[:, 17] = df_final.iloc[:, 17].dt.tz_localize(
-            "America/Sao_Paulo", ambiguous='NaT', nonexistent='NaT'
-        )
-        print(f"Linhas após remover NaT na coluna17: {len(df_final)}")
+        # Força datetimeindex e aplica fuso horário
+        df_final.iloc[:, 17] = pd.DatetimeIndex(df_final.iloc[:, 17]).tz_localize("America/Sao_Paulo", ambiguous='NaT', nonexistent='NaT')
+        print(f"Linhas após remover valores inválidos na coluna17: {len(df_final)}")
 
         # Filtra pelo período desejado
         df_final = df_final[(df_final.iloc[:, 17] >= inicio) & (df_final.iloc[:, 17] < fim)]
@@ -96,7 +96,7 @@ def unzip_and_process_data(zip_path, extract_to_dir):
         resultado = pd.merge(agrupado, contagem, on='Chave')
         resultado = resultado[['Chave', 'Coluna9', 'Coluna15', 'Coluna17', 'Quantidade', 'Coluna2']]
 
-        # Opcional: mostra as 5 primeiras linhas antes do envio
+        # Mostra as 5 primeiras linhas antes do envio
         print("5 primeiras linhas do DataFrame final:")
         print(resultado.head())
 
