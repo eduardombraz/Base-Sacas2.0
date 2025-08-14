@@ -47,7 +47,7 @@ def unzip_and_process_data(zip_path, extract_to_dir):
         all_dfs = [pd.read_csv(file, encoding='utf-8') for file in csv_files]
         df_final = pd.concat(all_dfs, ignore_index=True)
 
-        # --- FILTRAR PELA COLUNA17 (índice 17) ---
+        # --- FILTRAR PELA COLUNA17 (índice 17) com fuso horário ---
         agora = datetime.now(ZoneInfo("America/Sao_Paulo"))
 
         if agora.hour < 6:
@@ -57,10 +57,11 @@ def unzip_and_process_data(zip_path, extract_to_dir):
             inicio = agora.replace(hour=6, minute=0, second=0, microsecond=0)
             fim = agora.replace(hour=6, minute=0, second=0, microsecond=0) + timedelta(days=1)
 
-        df_final.iloc[:, 17] = pd.to_datetime(df_final.iloc[:, 17], errors='coerce')
+        # Converte Coluna17 para datetime e aplica fuso horário
+        df_final.iloc[:, 17] = pd.to_datetime(df_final.iloc[:, 17], errors='coerce').dt.tz_localize("America/Sao_Paulo")
         df_final = df_final[(df_final.iloc[:, 17] >= inicio) & (df_final.iloc[:, 17] < fim)]
         print(f"Dados filtrados entre {inicio} e {fim}. Total de linhas: {len(df_final)}")
-        # -----------------------------------------
+        # ---------------------------------------------------------
 
         print("Iniciando processamento dos dados...")
         colunas_desejadas = [0, 9, 15, 17, 2]
@@ -141,54 +142,3 @@ async def main():
 
             # --- Lógica de datas para preenchimento no site ---
             agora = datetime.now(ZoneInfo("America/Sao_Paulo"))
-            if agora.hour < 6:
-                d1 = (agora - timedelta(days=1)).strftime("%Y/%m/%d 06:00")
-                d0 = agora.strftime("%Y/%m/%d 06:00")
-            else:
-                d1 = agora.strftime("%Y/%m/%d 06:00")
-                d0 = (agora + timedelta(days=1)).strftime("%Y/%m/%d 06:00")
-            # ----------------------------------------------
-
-            date_input = page.locator('xpath=//*[@placeholder="Please choose date"]').nth(0)
-            await date_input.wait_for(state="visible", timeout=10000)
-            await date_input.click(force=True)
-            await date_input.fill(d1)
-            await page.wait_for_timeout(5000)
-
-            date_input = page.locator('xpath=//*[@placeholder="Please choose date"]').nth(1)
-            await date_input.wait_for(state="visible", timeout=10000)
-            await date_input.click(force=True)
-            await date_input.fill(d0)
-            await page.wait_for_timeout(5000)
-
-            await page.get_by_text("Criado em", exact=True).click()
-            await page.wait_for_timeout(8000)
-            await page.locator(".s-tree-node__content > .ssc-checkbox-wrapper > .ssc-checkbox > .ssc-checkbox-input").first.click()
-            await page.wait_for_timeout(8000)
-            await page.get_by_role("button", name="Confirmar").click()
-            await page.wait_for_timeout(360000)
-            
-            # DOWNLOAD
-            async with page.expect_download() as download_info:
-                await page.get_by_role("button", name="Baixar").first.click()
-            
-            download = await download_info.value
-            download_path = os.path.join(DOWNLOAD_DIR, download.suggested_filename)
-            await download.save_as(download_path)
-            print(f"Download concluído: {download_path}")
-
-            renamed_zip_path = rename_downloaded_file(DOWNLOAD_DIR, download_path)
-            if renamed_zip_path:
-                final_dataframe = unzip_and_process_data(renamed_zip_path, DOWNLOAD_DIR)
-                update_google_sheet_with_dataframe(final_dataframe)
-
-        except Exception as e:
-            print(f"Erro durante o processo principal: {e}")
-        finally:
-            await browser.close()
-            if os.path.exists(DOWNLOAD_DIR):
-                shutil.rmtree(DOWNLOAD_DIR)
-                print(f"Diretório de trabalho '{DOWNLOAD_DIR}' limpo.")
-
-if __name__ == "__main__":
-    asyncio.run(main())
