@@ -1,4 +1,4 @@
-import os
+import io
 import zipfile
 import pandas as pd
 import gspread
@@ -7,11 +7,12 @@ from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 import requests
+import os
 
 # --- Configurações ---
 DOWNLOAD_DIR = "/tmp/shopee_automation"
-ZIP_URL = "URL_DO_SEU_ARQUIVO"
-ZIP_NAME = "TO-Packed.zip"
+ZIP_URL = "URL_DO_SEU_ARQUIVO"  # Coloque a URL do GitHub
+ZIP_NAME = "base-sacas.zip"
 
 # --- Criar pasta de trabalho ---
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
@@ -19,20 +20,21 @@ os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 # --- Baixar o ZIP ---
 print("Baixando arquivo...")
 response = requests.get(ZIP_URL)
-zip_path = os.path.join(DOWNLOAD_DIR, ZIP_NAME)
-with open(zip_path, "wb") as f:
-    f.write(response.content)
-print(f"Download concluído: {zip_path}")
+if response.status_code != 200:
+    raise Exception(f"Erro ao baixar o .zip: {response.status_code}")
+print("Download concluído!")
 
-# --- Descompactar ---
-with zipfile.ZipFile(zip_path, "r") as zip_ref:
-    zip_ref.extractall(DOWNLOAD_DIR)
-print(f"Arquivo '{ZIP_NAME}' descompactado.")
+# --- Abrir o ZIP em memória ---
+zip_file = zipfile.ZipFile(io.BytesIO(response.content))
 
-# --- Ler todos os CSVs ---
+# --- Ler todos os CSVs dentro do ZIP e unificar ---
 print("Lendo e unificando arquivos CSV...")
-arquivos_csv = [os.path.join(DOWNLOAD_DIR, f) for f in os.listdir(DOWNLOAD_DIR) if f.lower().endswith(".csv")]
-df_list = [pd.read_csv(arq, sep=";", encoding="utf-8", dtype=str) for arq in arquivos_csv]
+df_list = []
+for file_name in zip_file.namelist():
+    if file_name.lower().endswith(".csv"):
+        with zip_file.open(file_name) as f:
+            df = pd.read_csv(f, sep=";", encoding="utf-8", dtype=str)
+            df_list.append(df)
 df_final = pd.concat(df_list, ignore_index=True)
 print(f"Total de linhas antes do filtro: {len(df_final)}")
 
@@ -81,6 +83,7 @@ set_with_dataframe(worksheet, df_final)
 print("✅ Dados enviados com sucesso.")
 
 # --- Limpeza ---
+# Como o ZIP não foi salvo no disco, só removemos CSVs se existirem
 for f in os.listdir(DOWNLOAD_DIR):
     os.remove(os.path.join(DOWNLOAD_DIR, f))
 print(f"Diretório de trabalho '{DOWNLOAD_DIR}' limpo.")
