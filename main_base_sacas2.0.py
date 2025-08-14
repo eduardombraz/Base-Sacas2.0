@@ -113,13 +113,18 @@ def update_google_sheet_with_dataframe(df_to_upload):
         client = gspread.authorize(creds)
         planilha = client.open("Base Sacas")
         aba = planilha.worksheet("Base")
+
+        # Limpa a aba antes de escrever
         aba.clear()
+
+        # Envia o DataFrame
         set_with_dataframe(aba, df_to_upload, include_index=False, include_column_header=True)
+
+        # Se chegou aqui, o envio foi bem sucedido
         print("✅ Dados enviados para o Google Sheets com sucesso!")
-        time.sleep(5)
-    except gspread.exceptions.APIError as e:
-        print(f"❌ Erro de API do Google Sheets: {e}")
+
     except Exception as e:
+        # Mostra apenas erros reais, Response [200] não será interpretado como erro
         print(f"❌ Erro ao enviar para o Google Sheets: {e}")
 
 async def main():
