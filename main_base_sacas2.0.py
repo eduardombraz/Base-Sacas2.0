@@ -59,14 +59,14 @@ def unzip_and_process_data(zip_path, extract_to_dir):
         inicio = inicio.replace(tzinfo=ZoneInfo("America/Sao_Paulo"))
         fim = fim.replace(tzinfo=ZoneInfo("America/Sao_Paulo"))
 
-        # Converte Coluna17 para datetime e remove valores inválidos
-        df_final.iloc[:, 17] = pd.to_datetime(
-            df_final.iloc[:, 17], errors='coerce', dayfirst=True
-        )
-        df_final = df_final[df_final.iloc[:, 17].notna()]
+        # Converte Coluna17 para datetime (dayfirst=True) e remove inválidos
+        df_final.iloc[:, 17] = pd.to_datetime(df_final.iloc[:, 17], errors='coerce', dayfirst=True)
+        df_final = df_final[df_final.iloc[:, 17].notna()].copy()
 
         # Aplica fuso horário com segurança
-        df_final.iloc[:, 17] = df_final.iloc[:, 17].dt.tz_localize("America/Sao_Paulo", ambiguous='NaT', nonexistent='NaT')
+        df_final.iloc[:, 17] = df_final.iloc[:, 17].dt.tz_localize(
+            "America/Sao_Paulo", ambiguous='NaT', nonexistent='NaT'
+        )
         print(f"Linhas após remover NaT na coluna17: {len(df_final)}")
 
         # Filtra pelo período desejado
@@ -129,7 +129,6 @@ def update_google_sheet_with_dataframe(df_to_upload):
         # Envia o DataFrame
         set_with_dataframe(aba, df_to_upload, include_index=False, include_column_header=True)
 
-        # Confirma sucesso
         print("✅ Dados enviados para o Google Sheets com sucesso!")
 
     except Exception as e:
