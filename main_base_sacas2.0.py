@@ -121,7 +121,7 @@ async def main():
 
             # --- Lógica ajustada das datas ---
             agora = datetime.now()
-            if agora.hour < 1:
+            if agora.hour < 6:
                 d1 = (agora - timedelta(days=1)).strftime("%Y/%m/%d")
                 d0 = agora.strftime("%Y/%m/%d")
             else:
