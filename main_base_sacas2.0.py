@@ -14,7 +14,6 @@ DOWNLOAD_DIR = "/tmp/shopee_automation"
 def unzip_and_process_data(zip_path, extract_to_dir):
     try:
         unzip_folder = os.path.join(extract_to_dir, "extracted_files")
-        # Clean up old extracted files if they exist
         if os.path.exists(unzip_folder):
             shutil.rmtree(unzip_folder)
         os.makedirs(unzip_folder, exist_ok=True)
@@ -33,7 +32,6 @@ def unzip_and_process_data(zip_path, extract_to_dir):
         all_dfs = [pd.read_csv(file, encoding='utf-8') for file in csv_files]
         df_final = pd.concat(all_dfs, ignore_index=True)
 
-        # --- CONVERSÃO DE DATETIME SEM TIMEZONE (naive) ---
         df_final.iloc[:, 17] = pd.to_datetime(df_final.iloc[:, 17], errors='coerce')
 
         agora = datetime.now()
@@ -44,7 +42,6 @@ def unzip_and_process_data(zip_path, extract_to_dir):
             inicio = agora.replace(hour=6, minute=0, second=0, microsecond=0)
             fim = (agora + timedelta(days=1)).replace(hour=6, minute=0, second=0, microsecond=0)
 
-        # FILTRA APENAS OS DADOS NO INTERVALO CORRETO
         df_final = df_final[df_final.iloc[:, 17].dt.tz_localize(None).between(inicio, fim, inclusive='left')]
         print(f"Dados filtrados entre {inicio} e {fim}. Total de linhas: {len(df_final)}")
 
@@ -78,7 +75,6 @@ def unzip_and_process_data(zip_path, extract_to_dir):
         
     except Exception as e:
         print(f"Erro ao descompactar ou processar os dados: {e}")
-        # Clean up on error
         if 'unzip_folder' in locals() and os.path.exists(unzip_folder):
             shutil.rmtree(unzip_folder)
         return None
@@ -101,7 +97,6 @@ def update_google_sheet_with_dataframe(df_to_upload):
         
         aba.clear()
         
-        # Convert DataFrame to list of lists (including headers) for gspread
         values_to_upload = [df_to_upload.columns.values.tolist()] + df_to_upload.values.tolist()
         
         aba.update('A1', values_to_upload, value_input_option='USER_ENTERED')
@@ -121,7 +116,6 @@ async def main():
         browser = await p.chromium.launch(headless=False,
                                           args=["--no-sandbox", "--disable-dev-shm-usage", "--window-size=1920,1080"])
         
-        # CORRECTED: Removed the 'downloads_path' argument.
         context = await browser.new_context(
             accept_downloads=True, 
             viewport={"width": 1920, "height": 1080}
@@ -137,7 +131,6 @@ async def main():
                 d1 = agora.strftime("%Y/%m/%d 06:00")
                 d0 = (agora + timedelta(days=1)).strftime("%Y/%m/%d 06:00")
 
-            # LOGIN
             print("Iniciando login...")
             await page.goto("https://spx.shopee.com.br/")
             await page.get_by_placeholder("Ops ID").fill('Ops71223')
@@ -152,18 +145,28 @@ async def main():
             except Exception:
                 print("Nenhum pop-up de diálogo foi encontrado.")
             
-            # NAVEGAÇÃO E EXPORT
+            # --- SEÇÃO CORRIGIDA ---
             print("Navegando para a página de gerenciamento...")
             await page.goto("https://spx.shopee.com.br/#/general-to-management")
-            await page.get_by_role("button", name="Exportar").click()
-            await page.wait_for_selector('div.ssc-dialog-body', timeout=10000)
-            
+
+            # Espera o botão 'Exportar' estar pronto antes de clicar
+            export_button = page.get_by_role("button", name="Exportar")
+            await export_button.wait_for(state="visible", timeout=15000)
+            await export_button.click()
+
+            # CORREÇÃO: Espera por um elemento específico DENTRO do pop-up.
+            # Isto é muito mais confiável do que esperar por um 'div' genérico.
+            print("Esperando o pop-up de exportação aparecer...")
+            first_date_input = page.get_by_placeholder("Please choose date").first
+            await first_date_input.wait_for(state="visible", timeout=20000)
+
             print("Preenchendo o formulário de exportação...")
             date_inputs = page.get_by_placeholder("Please choose date")
             await date_inputs.nth(0).fill(d1)
             await page.keyboard.press("Escape")
             await date_inputs.nth(1).fill(d0)
             await page.keyboard.press("Escape")
+            # --- FIM DA SEÇÃO CORRIGIDA ---
             
             await page.get_by_text("Criado em", exact=True).click()
             await page.locator(".s-tree-node__content > .ssc-checkbox-wrapper > .ssc-checkbox > .ssc-checkbox-input").first.click()
@@ -172,13 +175,11 @@ async def main():
             await page.wait_for_selector('role=button[name="Baixar"]', timeout=360000)
             print("Formulário preenchido. Iniciando o download...")
 
-            # SIMPLIFIED DOWNLOAD PROCESS
             async with page.expect_download() as download_info:
                 await page.get_by_role("button", name="Baixar").first.click()
             
             download = await download_info.value
             
-            # Define the final path and save the file there directly.
             current_hour = datetime.now().strftime("%H")
             final_zip_path = os.path.join(DOWNLOAD_DIR, f"TO-Packed{current_hour}.zip")
             await download.save_as(final_zip_path)
@@ -190,7 +191,6 @@ async def main():
                 update_google_sheet_with_dataframe(final_dataframe)
 
         except Exception as e:
-            # Capture a screenshot on error for easier debugging
             screenshot_path = "error_screenshot.png"
             await page.screenshot(path=screenshot_path)
             print(f"❌ Erro durante o processo principal: {e}")
