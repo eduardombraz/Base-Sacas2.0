@@ -56,23 +56,17 @@ def unzip_and_process_data(zip_path, extract_to_dir):
             inicio = agora.replace(hour=6, minute=0, second=0, microsecond=0)
             fim = (agora + timedelta(days=1)).replace(hour=6, minute=0, second=0, microsecond=0)
 
-        # Adiciona fuso horário a inicio/fim
         inicio = inicio.replace(tzinfo=ZoneInfo("America/Sao_Paulo"))
         fim = fim.replace(tzinfo=ZoneInfo("America/Sao_Paulo"))
 
-        # Converte Coluna17 para datetime
+        # Converte Coluna17 para datetime e remove valores inválidos
         df_final.iloc[:, 17] = pd.to_datetime(
-            df_final.iloc[:, 17],
-            errors='coerce',
-            dayfirst=True
+            df_final.iloc[:, 17], errors='coerce', dayfirst=True
         )
-
-        # Localiza fuso apenas se ainda não tiver
-        if df_final.iloc[:, 17].dt.tz is None:
-            df_final.iloc[:, 17] = df_final.iloc[:, 17].dt.tz_localize("America/Sao_Paulo", ambiguous='NaT', nonexistent='NaT')
-
-        # Remove linhas sem data válida
         df_final = df_final[df_final.iloc[:, 17].notna()]
+
+        # Aplica fuso horário com segurança
+        df_final.iloc[:, 17] = df_final.iloc[:, 17].dt.tz_localize("America/Sao_Paulo", ambiguous='NaT', nonexistent='NaT')
         print(f"Linhas após remover NaT na coluna17: {len(df_final)}")
 
         # Filtra pelo período desejado
