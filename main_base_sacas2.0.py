@@ -2,6 +2,7 @@ import asyncio
 from playwright.async_api import async_playwright
 import time
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 import os
 import shutil
 import pandas as pd
@@ -14,7 +15,7 @@ DOWNLOAD_DIR = "/tmp/shopee_automation"
 
 def rename_downloaded_file(download_dir, download_path):
     try:
-        current_hour = datetime.now().strftime("%H")
+        current_hour = datetime.now(ZoneInfo("America/Sao_Paulo")).strftime("%H")
         new_file_name = f"TO-Packed{current_hour}.zip"
         new_file_path = os.path.join(download_dir, new_file_name)
         if os.path.exists(new_file_path):
@@ -46,6 +47,21 @@ def unzip_and_process_data(zip_path, extract_to_dir):
         all_dfs = [pd.read_csv(file, encoding='utf-8') for file in csv_files]
         df_final = pd.concat(all_dfs, ignore_index=True)
 
+        # --- FILTRAR PELA COLUNA17 (índice 17) ---
+        agora = datetime.now(ZoneInfo("America/Sao_Paulo"))
+
+        if agora.hour < 6:
+            inicio = agora.replace(hour=6, minute=0, second=0, microsecond=0) - timedelta(days=1)
+            fim = agora.replace(hour=6, minute=0, second=0, microsecond=0)
+        else:
+            inicio = agora.replace(hour=6, minute=0, second=0, microsecond=0)
+            fim = agora.replace(hour=6, minute=0, second=0, microsecond=0) + timedelta(days=1)
+
+        df_final.iloc[:, 17] = pd.to_datetime(df_final.iloc[:, 17], errors='coerce')
+        df_final = df_final[(df_final.iloc[:, 17] >= inicio) & (df_final.iloc[:, 17] < fim)]
+        print(f"Dados filtrados entre {inicio} e {fim}. Total de linhas: {len(df_final)}")
+        # -----------------------------------------
+
         print("Iniciando processamento dos dados...")
         colunas_desejadas = [0, 9, 15, 17, 2]
         df_selecionado = df_final.iloc[:, colunas_desejadas].copy()
@@ -76,7 +92,9 @@ def update_google_sheet_with_dataframe(df_to_upload):
         
     try:
         print("Enviando dados processados para o Google Sheets...")
-        scope = ["https://spreadsheets.google.com/feeds", 'https://www.googleapis.com/auth/spreadsheets', "https://www.googleapis.com/auth/drive"]
+        scope = ["https://spreadsheets.google.com/feeds", 
+                 'https://www.googleapis.com/auth/spreadsheets', 
+                 "https://www.googleapis.com/auth/drive"]
         creds = ServiceAccountCredentials.from_json_keyfile_name("hxh.json", scope)
         client = gspread.authorize(creds)
         
@@ -95,10 +113,12 @@ def update_google_sheet_with_dataframe(df_to_upload):
 async def main():
     os.makedirs(DOWNLOAD_DIR, exist_ok=True)
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=False, args=["--no-sandbox", "--disable-dev-shm-usage", "--window-size=1920,1080"])
+        browser = await p.chromium.launch(headless=False, 
+                                          args=["--no-sandbox", "--disable-dev-shm-usage", "--window-size=1920,1080"])
         context = await browser.new_context(accept_downloads=True, viewport={"width": 1920, "height": 1080})
         page = await context.new_page()
         try:
+            # LOGIN
             await page.goto("https://spx.shopee.com.br/")
             await page.wait_for_selector('xpath=//*[@placeholder="Ops ID"]', timeout=15000)
             await page.locator('xpath=//*[@placeholder="Ops ID"]').fill('Ops71223')
@@ -111,6 +131,7 @@ async def main():
                 print("Nenhum pop-up de diálogo foi encontrado.")
                 await page.keyboard.press("Escape")
             
+            # NAVEGAÇÃO E EXPORT
             await page.goto("https://spx.shopee.com.br/#/general-to-management")
             await page.wait_for_timeout(8000)
             await page.get_by_role("button", name="Exportar").click()
@@ -118,8 +139,8 @@ async def main():
             await page.locator('xpath=/html[1]/body[1]/span[4]/div[1]/div[1]/div[1]').click()
             await page.wait_for_timeout(8000)
 
-            # --- Lógica de datas com hora inicial 06:00 ---
-            agora = datetime.now()
+            # --- Lógica de datas para preenchimento no site ---
+            agora = datetime.now(ZoneInfo("America/Sao_Paulo"))
             if agora.hour < 6:
                 d1 = (agora - timedelta(days=1)).strftime("%Y/%m/%d 06:00")
                 d0 = agora.strftime("%Y/%m/%d 06:00")
@@ -147,6 +168,7 @@ async def main():
             await page.get_by_role("button", name="Confirmar").click()
             await page.wait_for_timeout(360000)
             
+            # DOWNLOAD
             async with page.expect_download() as download_info:
                 await page.get_by_role("button", name="Baixar").first.click()
             
