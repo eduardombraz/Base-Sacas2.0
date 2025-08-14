@@ -8,12 +8,11 @@ import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import zipfile
-from gspread_dataframe import set_with_dataframe # Import para upload de DataFrame
+from gspread_dataframe import set_with_dataframe
 
 DOWNLOAD_DIR = "/tmp/shopee_automation"
 
 def rename_downloaded_file(download_dir, download_path):
-    """Renames the downloaded file to include the current hour."""
     try:
         current_hour = datetime.now().strftime("%H")
         new_file_name = f"TO-Packed{current_hour}.zip"
@@ -119,14 +118,15 @@ async def main():
             await page.locator('xpath=/html[1]/body[1]/span[4]/div[1]/div[1]/div[1]').click()
             await page.wait_for_timeout(8000)
 
-            # --- Lógica ajustada das datas ---
+            # --- Lógica de datas com hora inicial 06:00 ---
             agora = datetime.now()
             if agora.hour < 6:
-                d1 = (agora - timedelta(days=1)).strftime("%Y/%m/%d")
-                d0 = agora.strftime("%Y/%m/%d")
+                d1 = (agora - timedelta(days=1)).strftime("%Y/%m/%d 06:00")
+                d0 = agora.strftime("%Y/%m/%d 06:00")
             else:
-                d1 = agora.strftime("%Y/%m/%d")
-                d0 = agora.strftime("%Y/%m/%d")
+                d1 = agora.strftime("%Y/%m/%d 06:00")
+                d0 = (agora + timedelta(days=1)).strftime("%Y/%m/%d 06:00")
+            # ----------------------------------------------
 
             date_input = page.locator('xpath=//*[@placeholder="Please choose date"]').nth(0)
             await date_input.wait_for(state="visible", timeout=10000)
@@ -139,7 +139,6 @@ async def main():
             await date_input.click(force=True)
             await date_input.fill(d0)
             await page.wait_for_timeout(5000)
-            # --- Fim do ajuste de datas ---
 
             await page.get_by_text("Criado em", exact=True).click()
             await page.wait_for_timeout(8000)
