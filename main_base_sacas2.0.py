@@ -10,15 +10,15 @@ from oauth2client.service_account import ServiceAccountCredentials
 import zipfile  
 from gspread_dataframe import set_with_dataframe  
 import traceback  
+import json  
   
 # --- CONFIGURAÇÕES ---  
 DOWNLOAD_DIR = "/tmp/shopee_automation"  
-OPS_ID = os.environ.get("SHP_USER", "Ops115950")   
-OPS_PASS = os.environ.get("SHP_PASS", "@Shopee123")  
 JSON_CREDS_FILE = "hxh.json"  
 GOOGLE_SHEET_NAME = "FIFO INBOUND SP5"  
 GOOGLE_SHEET_TAB = "Base"  
-  
+# Pega o estado de autenticação do GitHub Secret  
+AUTH_STATE_JSON = os.environ.get("AUTH_STATE")  
   
 def rename_downloaded_file(download_dir, download_path):  
     """Renomeia o arquivo baixado para incluir a hora atual."""  
@@ -46,26 +46,20 @@ def unzip_and_process_data(zip_path, extract_to_dir):
         if os.path.exists(unzip_folder):  
             shutil.rmtree(unzip_folder)  
         os.makedirs(unzip_folder, exist_ok=True)  
-  
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:  
             zip_ref.extractall(unzip_folder)  
         print(f"Arquivo '{os.path.basename(zip_path)}' descompactado.")  
-  
         csv_files = [os.path.join(unzip_folder, f) for f in os.listdir(unzip_folder) if f.lower().endswith('.csv')]  
-          
         if not csv_files:  
             print("Nenhum arquivo CSV encontrado no ZIP.")  
             return None  
-  
         print(f"Lendo e unificando {len(csv_files)} arquivos CSV...")  
         all_dfs = [pd.read_csv(file, encoding='utf-8', on_bad_lines='skip') for file in csv_files]  
         df_final = pd.concat(all_dfs, ignore_index=True)  
-  
         print("Iniciando processamento dos dados...")  
         indices_para_manter = [0, 14, 39, 40, 48]  
         df_final = df_final.iloc[:, indices_para_manter]  
         print("Processamento de dados concluído com sucesso.")  
-          
         return df_final  
     except Exception as e:  
         print(f"Erro ao descompactar ou processar os dados: {e}")  
@@ -79,78 +73,51 @@ def update_google_sheet_with_dataframe(df_to_upload):
     if df_to_upload is None or df_to_upload.empty:  
         print("Nenhum dado para enviar ao Google Sheets.")  
         return  
-          
     try:  
         print("Enviando dados processados para o Google Sheets...")  
         df_to_upload = df_to_upload.fillna("").astype(str)  
-  
         scope = ["https://spreadsheets.google.com/feeds", 'https://www.googleapis.com/auth/spreadsheets', "https://www.googleapis.com/auth/drive"]  
         creds = ServiceAccountCredentials.from_json_keyfile_name(JSON_CREDS_FILE, scope)  
         client = gspread.authorize(creds)  
-          
         planilha = client.open(GOOGLE_SHEET_NAME)  
-  
         try:  
             aba = planilha.worksheet(GOOGLE_SHEET_TAB)  
         except gspread.exceptions.WorksheetNotFound:  
             print(f"Aba '{GOOGLE_SHEET_TAB}' não encontrada. Criando uma nova.")  
             aba = planilha.add_worksheet(title=GOOGLE_SHEET_TAB, rows="1000", cols="20")  
-          
         aba.clear()  
         set_with_dataframe(aba, df_to_upload)  
-          
         print("✅ Dados enviados para o Google Sheets com sucesso!")  
     except Exception as e:  
         print(f"❌ Erro ao enviar para o Google Sheets:\n{traceback.format_exc()}")  
   
 async def main():  
-    if os.path.exists(DOWNLOAD_DIR):  
-        shutil.rmtree(DOWNLOAD_DIR)  
+    if not AUTH_STATE_JSON:  
+        print("❌ Erro Crítico: Secret 'AUTH_STATE' não encontrado. Siga as instruções para criar o estado de autenticação.")  
+        return  
+  
+    # Escreve o conteúdo do secret em um arquivo temporário  
+    auth_file_path = os.path.join(DOWNLOAD_DIR, "auth_state.json")  
     os.makedirs(DOWNLOAD_DIR, exist_ok=True)  
-      
+    with open(auth_file_path, "w") as f:  
+        f.write(AUTH_STATE_JSON)  
+  
     browser = None  
     try:  
         async with async_playwright() as p:  
             browser = await p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])  
-            context = await browser.new_context(accept_downloads=True, viewport={"width": 1920, "height": 1080})  
+            # Carrega o estado de autenticação salvo no contexto do navegador  
+            context = await browser.new_context(storage_state=auth_file_path, accept_downloads=True, viewport={"width": 1920, "height": 1080})  
             page = await context.new_page()  
-              
-            print("Iniciando login na Shopee SPX...")  
-            await page.goto("https://spx.shopee.com.br/", timeout=60000)  
-              
-            print("Aguardando campos de login...")  
-            user_input = page.locator('input[placeholder="Ops ID"]')  
-            pass_input = page.locator('input[placeholder="Senha"]')  
-              
-            await user_input.wait_for(state="visible", timeout=60000)  
-              
-            print("Preenchendo credenciais...")  
-            await user_input.fill(OPS_ID)  
-            await pass_input.fill(OPS_PASS)  
   
-            print("Submetendo formulário...")  
-            await pass_input.press("Enter")  
-              
-            # --- AJUSTE ESTRATÉGICO ---  
-            # Após o login, vamos direto para a página de destino.  
-            # Se o login falhou, essa navegação dará erro ou não mostrará o botão 'Exportar'.  
-            print("Login submetido. Navegando diretamente para a página de rastreamento...")  
+            print("Estado de autenticação carregado. Navegando diretamente para a página de rastreamento...")  
             await page.goto("https://spx.shopee.com.br/#/orderTracking", timeout=60000)  
-              
-            # Agora, a confirmação do login é a aparição do botão 'Exportar' na página de destino.  
+  
             print("Aguardando página de rastreamento carregar (verificando botão Exportar)...")  
             export_button = page.get_by_role('button', name='Exportar')  
             await export_button.wait_for(state="visible", timeout=60000)  
-            print("Login bem-sucedido e página de rastreamento carregada.")  
-            # --- FIM DO AJUSTE ---  
-              
-            # Tenta fechar qualquer pop-up que possa ter aparecido  
-            try:  
-                await page.locator('.ssc-dialog-close').click(timeout=5000)  
-                print("Pop-up de diálogo fechado.")  
-            except:  
-                print("Nenhum pop-up de diálogo foi encontrado ou já foi fechado.")  
-              
+            print("Página de rastreamento carregada com sucesso.")  
+  
             print("Configurando filtros para exportação...")  
             await export_button.click()  
               
@@ -164,7 +131,7 @@ async def main():
             print("Aguardando o sistema processar o relatório. Isso pode levar vários minutos...")  
   
             download_button = page.get_by_role("button", name="Baixar").first  
-            await download_button.wait_for(state="visible", timeout=600000) # 10 min  
+            await download_button.wait_for(state="visible", timeout=600000)  
             print("Relatório pronto. Iniciando download.")  
   
             async with page.expect_download() as download_info:  
@@ -192,4 +159,4 @@ async def main():
             print(f"Diretório de trabalho '{DOWNLOAD_DIR}' limpo.")  
   
 if __name__ == "__main__":  
-    asyncio.run(main()) 
+    asyncio.run(main())
