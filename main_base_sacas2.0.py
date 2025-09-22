@@ -58,7 +58,7 @@ def unzip_and_process_data(zip_path, extract_to_dir):
             return None  
   
         print(f"Lendo e unificando {len(csv_files)} arquivos CSV...")  
-        all_dfs = [pd.read_csv(file, encoding='utf-8') for file in csv_files]  
+        all_dfs = [pd.read_csv(file, encoding='utf-8', on_bad_lines='skip') for file in csv_files]  
         df_final = pd.concat(all_dfs, ignore_index=True)  
   
         print("Iniciando processamento dos dados...")  
@@ -123,7 +123,6 @@ async def main():
             pass_input = page.locator('input[placeholder="Senha"]')  
               
             await user_input.wait_for(state="visible", timeout=60000)  
-            await pass_input.wait_for(state="visible", timeout=60000)  
               
             print("Preenchendo credenciais...")  
             await user_input.fill(OPS_ID)  
@@ -132,26 +131,27 @@ async def main():
             print("Submetendo formulário...")  
             await pass_input.press("Enter")  
               
-            # --- AJUSTE AQUI ---  
-            # Em vez de esperar pela URL, esperamos por um elemento que confirma o login, como o menu lateral.  
-            # O seletor '.ssc-menu-group-title:has-text("Rastreamento")' é bem específico e deve funcionar.  
-            print("Aguardando confirmação do login...")  
-            await page.locator('.ssc-menu-group-title:has-text("Rastreamento")').wait_for(timeout=60000)  
-            print("Login bem-sucedido.")  
+            # --- AJUSTE ESTRATÉGICO ---  
+            # Após o login, vamos direto para a página de destino.  
+            # Se o login falhou, essa navegação dará erro ou não mostrará o botão 'Exportar'.  
+            print("Login submetido. Navegando diretamente para a página de rastreamento...")  
+            await page.goto("https://spx.shopee.com.br/#/orderTracking", timeout=60000)  
+              
+            # Agora, a confirmação do login é a aparição do botão 'Exportar' na página de destino.  
+            print("Aguardando página de rastreamento carregar (verificando botão Exportar)...")  
+            export_button = page.get_by_role('button', name='Exportar')  
+            await export_button.wait_for(state="visible", timeout=60000)  
+            print("Login bem-sucedido e página de rastreamento carregada.")  
             # --- FIM DO AJUSTE ---  
               
+            # Tenta fechar qualquer pop-up que possa ter aparecido  
             try:  
                 await page.locator('.ssc-dialog-close').click(timeout=5000)  
                 print("Pop-up de diálogo fechado.")  
             except:  
-                print("Nenhum pop-up de diálogo encontrado.")  
+                print("Nenhum pop-up de diálogo foi encontrado ou já foi fechado.")  
               
-            print("Navegando para a página de rastreamento de pedidos...")  
-            await page.goto("https://spx.shopee.com.br/#/orderTracking")  
-  
             print("Configurando filtros para exportação...")  
-            export_button = page.get_by_role('button', name='Exportar')  
-            await export_button.wait_for(state="visible", timeout=30000) # Garante que a página carregou  
             await export_button.click()  
               
             await page.locator('label:has-text("Status do pedido") + div').click()  
@@ -164,7 +164,7 @@ async def main():
             print("Aguardando o sistema processar o relatório. Isso pode levar vários minutos...")  
   
             download_button = page.get_by_role("button", name="Baixar").first  
-            await download_button.wait_for(state="visible", timeout=600000)  
+            await download_button.wait_for(state="visible", timeout=600000) # 10 min  
             print("Relatório pronto. Iniciando download.")  
   
             async with page.expect_download() as download_info:  
@@ -192,4 +192,4 @@ async def main():
             print(f"Diretório de trabalho '{DOWNLOAD_DIR}' limpo.")  
   
 if __name__ == "__main__":  
-    asyncio.run(main())  
+    asyncio.run(main()) 
