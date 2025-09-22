@@ -129,16 +129,16 @@ async def main():
             await user_input.fill(OPS_ID)  
             await pass_input.fill(OPS_PASS)  
   
-            # --- AJUSTE AQUI ---  
-            # Em vez de procurar por um botão de submit, vamos simular que o usuário pressionou "Enter" no campo da senha.  
-            # Esta é uma forma muito robusta de submeter um formulário de login.  
             print("Submetendo formulário...")  
             await pass_input.press("Enter")  
-            # --- FIM DO AJUSTE ---  
-  
+              
+            # --- AJUSTE AQUI ---  
+            # Em vez de esperar pela URL, esperamos por um elemento que confirma o login, como o menu lateral.  
+            # O seletor '.ssc-menu-group-title:has-text("Rastreamento")' é bem específico e deve funcionar.  
             print("Aguardando confirmação do login...")  
-            await page.wait_for_url("**/dashboard", timeout=60000)  
+            await page.locator('.ssc-menu-group-title:has-text("Rastreamento")').wait_for(timeout=60000)  
             print("Login bem-sucedido.")  
+            # --- FIM DO AJUSTE ---  
               
             try:  
                 await page.locator('.ssc-dialog-close').click(timeout=5000)  
@@ -150,7 +150,10 @@ async def main():
             await page.goto("https://spx.shopee.com.br/#/orderTracking")  
   
             print("Configurando filtros para exportação...")  
-            await page.get_by_role('button', name='Exportar').click()  
+            export_button = page.get_by_role('button', name='Exportar')  
+            await export_button.wait_for(state="visible", timeout=30000) # Garante que a página carregou  
+            await export_button.click()  
+              
             await page.locator('label:has-text("Status do pedido") + div').click()  
             await page.get_by_role("treeitem", name="SOC_Received").click()  
             await page.locator('label:has-text("SoC") + div').click()  
