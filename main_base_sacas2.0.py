@@ -13,7 +13,6 @@ import traceback
   
 # --- CONFIGURAÇÕES ---  
 DOWNLOAD_DIR = "/tmp/shopee_automation"  
-# Para segurança (especialmente no GitHub Actions), use variáveis de ambiente ou secrets  
 OPS_ID = os.environ.get("SHP_USER", "Ops115950")   
 OPS_PASS = os.environ.get("SHP_PASS", "@Shopee123")  
 JSON_CREDS_FILE = "hxh.json"  
@@ -25,7 +24,7 @@ def rename_downloaded_file(download_dir, download_path):
     """Renomeia o arquivo baixado para incluir a hora atual."""  
     try:  
         current_hour = datetime.datetime.now().strftime("%H")  
-        new_file_name = f"SOC_Received_{current_hour}.zip" # Nome mais descritivo  
+        new_file_name = f"SOC_Received_{current_hour}.zip"  
         new_file_path = os.path.join(download_dir, new_file_name)  
         if os.path.exists(new_file_path):  
             os.remove(new_file_path)  
@@ -34,7 +33,7 @@ def rename_downloaded_file(download_dir, download_path):
         print(f"Arquivo salvo como: {new_file_path}")  
         return new_file_path  
     except FileNotFoundError:  
-        print(f"Erro ao renomear: Arquivo de origem '{download_path}' não encontrado. Pode já ter sido movido.")  
+        print(f"Erro ao renomear: Arquivo de origem '{download_path}' não encontrado.")  
         return None  
     except Exception as e:  
         print(f"Erro ao renomear o arquivo: {e}")  
@@ -45,7 +44,7 @@ def unzip_and_process_data(zip_path, extract_to_dir):
     try:  
         unzip_folder = os.path.join(extract_to_dir, "extracted_files")  
         if os.path.exists(unzip_folder):  
-            shutil.rmtree(unzip_folder) # Limpa extrações anteriores  
+            shutil.rmtree(unzip_folder)  
         os.makedirs(unzip_folder, exist_ok=True)  
   
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:  
@@ -72,7 +71,6 @@ def unzip_and_process_data(zip_path, extract_to_dir):
         print(f"Erro ao descompactar ou processar os dados: {e}")  
         return None  
     finally:  
-        # Limpa a pasta de extração após o uso  
         if 'unzip_folder' in locals() and os.path.exists(unzip_folder):  
             shutil.rmtree(unzip_folder)  
   
@@ -86,11 +84,7 @@ def update_google_sheet_with_dataframe(df_to_upload):
         print("Enviando dados processados para o Google Sheets...")  
         df_to_upload = df_to_upload.fillna("").astype(str)  
   
-        scope = [  
-            "https://spreadsheets.google.com/feeds",  
-            'https://www.googleapis.com/auth/spreadsheets',  
-            "https://www.googleapis.com/auth/drive"  
-        ]  
+        scope = ["https://spreadsheets.google.com/feeds", 'https://www.googleapis.com/auth/spreadsheets', "https://www.googleapis.com/auth/drive"]  
         creds = ServiceAccountCredentials.from_json_keyfile_name(JSON_CREDS_FILE, scope)  
         client = gspread.authorize(creds)  
           
@@ -106,7 +100,6 @@ def update_google_sheet_with_dataframe(df_to_upload):
         set_with_dataframe(aba, df_to_upload)  
           
         print("✅ Dados enviados para o Google Sheets com sucesso!")  
-  
     except Exception as e:  
         print(f"❌ Erro ao enviar para o Google Sheets:\n{traceback.format_exc()}")  
   
@@ -123,9 +116,8 @@ async def main():
             page = await context.new_page()  
               
             print("Iniciando login na Shopee SPX...")  
-            await page.goto("https://spx.shopee.com.br/", timeout=60000) # Aumentado timeout da navegação  
+            await page.goto("https://spx.shopee.com.br/", timeout=60000)  
               
-            # --- AJUSTE NO LOGIN PARA MAIOR ROBUSTEZ ---  
             print("Aguardando campos de login...")  
             user_input = page.locator('input[placeholder="Ops ID"]')  
             pass_input = page.locator('input[placeholder="Senha"]')  
@@ -136,16 +128,18 @@ async def main():
             print("Preenchendo credenciais...")  
             await user_input.fill(OPS_ID)  
             await pass_input.fill(OPS_PASS)  
-              
-            # Clica no botão de submissão do formulário. É mais seguro que procurar pelo texto "Login".  
-            await page.locator('form button[type="submit"]').click()  
+  
+            # --- AJUSTE AQUI ---  
+            # Em vez de procurar por um botão de submit, vamos simular que o usuário pressionou "Enter" no campo da senha.  
+            # Esta é uma forma muito robusta de submeter um formulário de login.  
+            print("Submetendo formulário...")  
+            await pass_input.press("Enter")  
             # --- FIM DO AJUSTE ---  
   
             print("Aguardando confirmação do login...")  
             await page.wait_for_url("**/dashboard", timeout=60000)  
             print("Login bem-sucedido.")  
               
-            # Remove pop-ups de diálogo, se houver  
             try:  
                 await page.locator('.ssc-dialog-close').click(timeout=5000)  
                 print("Pop-up de diálogo fechado.")  
@@ -163,13 +157,11 @@ async def main():
             await page.get_by_role('textbox', name='procurar por').fill('SoC_SP_Cravinhos')  
             await page.get_by_role('listitem', name='SoC_SP_Cravinhos').click()  
               
-            # Clica no botão de confirmação e aguarda o processamento  
             await page.get_by_role("button", name="Confirmar").click()  
             print("Aguardando o sistema processar o relatório. Isso pode levar vários minutos...")  
   
-            # Espera pelo botão de Download se tornar visível  
             download_button = page.get_by_role("button", name="Baixar").first  
-            await download_button.wait_for(state="visible", timeout=600000) # Timeout de 10 minutos  
+            await download_button.wait_for(state="visible", timeout=600000)  
             print("Relatório pronto. Iniciando download.")  
   
             async with page.expect_download() as download_info:  
@@ -180,7 +172,6 @@ async def main():
             await download.save_as(download_path)  
             print(f"Download concluído: {download_path}")  
   
-            # --- PROCESSAMENTO ÚNICO ---  
             renamed_zip_path = rename_downloaded_file(DOWNLOAD_DIR, download_path)  
             if renamed_zip_path:  
                 final_dataframe = unzip_and_process_data(renamed_zip_path, DOWNLOAD_DIR)  
