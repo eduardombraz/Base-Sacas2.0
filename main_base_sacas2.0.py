@@ -123,14 +123,26 @@ async def main():
             page = await context.new_page()  
               
             print("Iniciando login na Shopee SPX...")  
-            await page.goto("https://spx.shopee.com.br/")  
-            await page.wait_for_selector('input[placeholder="Ops ID"]', timeout=30000)  
-            await page.fill('input[placeholder="Ops ID"]', OPS_ID)  
-            await page.fill('input[placeholder="Senha"]', OPS_PASS)  
-            await page.locator('button:has-text("Login")').click()  
+            await page.goto("https://spx.shopee.com.br/", timeout=60000) # Aumentado timeout da navegação  
+              
+            # --- AJUSTE NO LOGIN PARA MAIOR ROBUSTEZ ---  
+            print("Aguardando campos de login...")  
+            user_input = page.locator('input[placeholder="Ops ID"]')  
+            pass_input = page.locator('input[placeholder="Senha"]')  
+              
+            await user_input.wait_for(state="visible", timeout=60000)  
+            await pass_input.wait_for(state="visible", timeout=60000)  
+              
+            print("Preenchendo credenciais...")  
+            await user_input.fill(OPS_ID)  
+            await pass_input.fill(OPS_PASS)  
+              
+            # Clica no botão de submissão do formulário. É mais seguro que procurar pelo texto "Login".  
+            await page.locator('form button[type="submit"]').click()  
+            # --- FIM DO AJUSTE ---  
   
-            # Espera o login ser concluído verificando a URL ou um elemento da página principal  
-            await page.wait_for_url("**/dashboard", timeout=30000)  
+            print("Aguardando confirmação do login...")  
+            await page.wait_for_url("**/dashboard", timeout=60000)  
             print("Login bem-sucedido.")  
               
             # Remove pop-ups de diálogo, se houver  
@@ -155,7 +167,7 @@ async def main():
             await page.get_by_role("button", name="Confirmar").click()  
             print("Aguardando o sistema processar o relatório. Isso pode levar vários minutos...")  
   
-            # Em vez de um timeout fixo, espera pelo botão de Download se tornar visível  
+            # Espera pelo botão de Download se tornar visível  
             download_button = page.get_by_role("button", name="Baixar").first  
             await download_button.wait_for(state="visible", timeout=600000) # Timeout de 10 minutos  
             print("Relatório pronto. Iniciando download.")  
