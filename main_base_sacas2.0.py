@@ -1,8 +1,3 @@
-Claro, vamos dar uma olhada no seu código. Analisei o script e identifiquei alguns pontos lógicos e de fluxo que podem estar causando o problema, especialmente ao rodar em um ambiente automatizado como o GitHub Actions.
-
-O erro principal está no fluxo de download e processamento. Você está tentando renomear, descompactar e enviar o mesmo arquivo duas vezes seguidas.
-
-```python
 # --- Bloco que se repete ---
 
             # DOWNLOAD
@@ -230,6 +225,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-```
-
-Substitua este código no seu repositório. Ele deve funcionar de forma mais estável e previsível.
