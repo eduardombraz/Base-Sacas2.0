@@ -49,12 +49,12 @@ def unzip_and_process_data(zip_path, extract_to_dir):
 
         # --- FILTRAR PELA COLUNA17 (índice 17) com fuso horário ---
         agora = datetime.now(ZoneInfo("America/Sao_Paulo"))
-        if agora.hour < 6:
-            inicio = (agora - timedelta(days=1)).replace(hour=6, minute=0, second=0, microsecond=0)
-            fim = agora.replace(hour=6, minute=0, second=0, microsecond=0)
+        if agora.hour < 7:
+            inicio = (agora - timedelta(days=1)).replace(hour=7, minute=0, second=0, microsecond=0)
+            fim = agora.replace(hour=7, minute=0, second=0, microsecond=0)
         else:
-            inicio = agora.replace(hour=6, minute=0, second=0, microsecond=0)
-            fim = (agora + timedelta(days=1)).replace(hour=6, minute=0, second=0, microsecond=0)
+            inicio = agora.replace(hour=7, minute=0, second=0, microsecond=0)
+            fim = (agora + timedelta(days=1)).replace(hour=7, minute=0, second=0, microsecond=0)
 
         inicio = inicio.replace(tzinfo=ZoneInfo("America/Sao_Paulo"))
         fim = fim.replace(tzinfo=ZoneInfo("America/Sao_Paulo"))
